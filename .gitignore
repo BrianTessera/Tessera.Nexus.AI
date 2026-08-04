@@ -1,0 +1,43 @@
+﻿# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# Test results
+TestResults/
+coverage/
+*.trx
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets and local config
+appsettings.Development.json
+appsettings.Local.json
+*.secrets.json
+
+# Publish output
+publish/
+artifacts/
+
+# NuGet
+*.nupkg
+packages/
+
+# Temporary files
+*.tmp
+*.bak

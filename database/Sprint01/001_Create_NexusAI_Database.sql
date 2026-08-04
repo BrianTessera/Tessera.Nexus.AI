@@ -1,0 +1,10 @@
+﻿-- ============================================================
+-- Tessera Nexus AI
+-- Sprint 1 Database Foundation
+-- ============================================================
+-- Target database: NexusAI
+-- Purpose:
+--   Create cfg, meta, ai, sec, and audit schemas.
+--   Create foundational tables for metadata, business knowledge,
+--   security policy, configuration, and audit logging.
+-- ============================================================
