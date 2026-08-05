@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Data;
 
-namespace Tessera.Nexus.AI.Application.Contracts
+namespace Tessera.Nexus.AI.Application.Contracts;
+
+public interface IDbConnectionFactory
 {
-    internal interface IDbConnectionFactory
-    {
-    }
+    IDbConnection CreateNexusAiConnection();
+
+    IDbConnection CreateEpicorConnection();
 }

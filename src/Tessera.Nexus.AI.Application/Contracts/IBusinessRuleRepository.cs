@@ -1,10 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Tessera.Nexus.AI.Domain.Entities;
 
-namespace Tessera.Nexus.AI.Application.Contracts
+namespace Tessera.Nexus.AI.Application.Contracts;
+
+public interface IBusinessRuleRepository
 {
-    internal interface IBusinessRuleRepository
-    {
-    }
+    Task<BusinessRule?> GetByIdAsync(
+        int businessRuleId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<BusinessRule>> GetActiveAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<BusinessRule>> GetByDomainAsync(
+        string semanticDomain,
+        CancellationToken cancellationToken = default);
+
+    Task<int> CreateAsync(
+        BusinessRule rule,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateAsync(
+        BusinessRule rule,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        int businessRuleId,
+        CancellationToken cancellationToken = default);
 }

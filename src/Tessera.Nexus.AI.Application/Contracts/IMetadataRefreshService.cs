@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace Tessera.Nexus.AI.Application.Contracts;
 
-namespace Tessera.Nexus.AI.Application.Contracts
+public interface IMetadataRefreshService
 {
-    internal interface IMetadataRefreshService
-    {
-    }
+    Task RefreshAsync(
+        CancellationToken cancellationToken = default);
 }

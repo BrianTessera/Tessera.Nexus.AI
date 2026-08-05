@@ -1,14 +1,21 @@
+using Tessera.Nexus.AI.Application.Contracts;
+using Tessera.Nexus.AI.Infrastructure.Database;
+using Tessera.Nexus.AI.Infrastructure.DependencyInjection;
 using Tessera.Nexus.AI.Web.Components;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddInfrastructure();
+builder.Services.AddScoped<IDatabaseHealthCheckService,
+                   DatabaseHealthCheckService>();
+
+
+
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

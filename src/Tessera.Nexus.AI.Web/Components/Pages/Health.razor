@@ -1,0 +1,33 @@
+﻿@page "/health"
+@using Tessera.Nexus.AI.Application.Contracts
+@inject IDatabaseHealthCheckService HealthCheck
+
+
+<PageTitle>Health Check</PageTitle>
+
+<h3>Database Health Check</h3>
+
+@if (_loading)
+{
+    <p>Testing connections...</p>
+}
+else
+{
+    <p>NexusAI: @(_nexusAiOk ? "✅ Connected" : "❌ Failed")</p>
+    <p>Epicor: @(_epicorOk ? "✅ Connected" : "❌ Failed")</p>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _nexusAiOk;
+    private bool _epicorOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _nexusAiOk = await HealthCheck.TestNexusAiConnectionAsync();
+        _epicorOk = await HealthCheck.TestEpicorConnectionAsync();
+
+        _loading = false;
+    }
+}
+

@@ -1,10 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Tessera.Nexus.AI.Domain.Entities;
 
-namespace Tessera.Nexus.AI.Application.Contracts
+namespace Tessera.Nexus.AI.Application.Contracts;
+
+public interface IAuditRepository
 {
-    internal interface IAuditRepository
-    {
-    }
+    Task<long> LogEventAsync(
+        ApplicationEventLog logEntry,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ApplicationEventLog>> GetRecentEventsAsync(
+        int top = 100,
+        CancellationToken cancellationToken = default);
 }
