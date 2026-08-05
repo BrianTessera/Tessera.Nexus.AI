@@ -1,17 +1,17 @@
-﻿namespace Tessera.Nexus.AI.Application.Contracts;
+﻿using Tessera.Nexus.AI.Domain.Entities;
+
+namespace Tessera.Nexus.AI.Application.Contracts;
 
 public interface IApplicationSettingRepository
 {
-    Task<string?> GetValueAsync(
+    Task<ApplicationSetting?> GetByKeyAsync(
         string settingKey,
         CancellationToken cancellationToken = default);
 
-    Task<Dictionary<string, string?>> GetAllAsync(
+    Task<IReadOnlyList<ApplicationSetting>> GetAllAsync(
         CancellationToken cancellationToken = default);
 
-    Task SaveAsync(
-        string settingKey,
-        string? value,
-        string modifiedBy,
+    Task UpdateAsync(
+        ApplicationSetting setting,
         CancellationToken cancellationToken = default);
 }

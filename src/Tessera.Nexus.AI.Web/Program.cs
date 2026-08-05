@@ -1,6 +1,7 @@
 using Tessera.Nexus.AI.Application.Contracts;
 using Tessera.Nexus.AI.Infrastructure.Database;
 using Tessera.Nexus.AI.Infrastructure.DependencyInjection;
+using Tessera.Nexus.AI.Infrastructure.Repositories;
 using Tessera.Nexus.AI.Web.Components;
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +12,8 @@ builder.Services.AddInfrastructure();
 builder.Services.AddScoped<IDatabaseHealthCheckService,
                    DatabaseHealthCheckService>();
 
-
+builder.Services.AddScoped<IApplicationSettingRepository,
+                   ApplicationSettingRepository>();
 
 
 var app = builder.Build();

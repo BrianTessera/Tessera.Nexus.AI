@@ -1,0 +1,49 @@
+﻿@page "/settings"
+
+@using Tessera.Nexus.AI.Domain.Entities
+@using Tessera.Nexus.AI.Application.Contracts
+
+@inject IApplicationSettingRepository Repository
+
+<PageTitle>Settings</PageTitle>
+
+<h3>Application Settings</h3>
+
+@if (_settings is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Key</th>
+                <th>Value</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var setting in _settings)
+            {
+                <tr>
+                    <td>@setting.SettingKey</td>
+                    <td>@setting.SettingValue</td>
+                    <td>@setting.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+
+    private IReadOnlyList<ApplicationSetting>? _settings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings =
+            await Repository.GetAllAsync();
+    }
+
+}
