@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped <IBusinessKnowledgeRepository,
             BusinessKnowledgeRepository > ();
 
+        services.AddScoped<IBusinessRuleRepository, BusinessRuleRepository>();
 
         return services;
     }

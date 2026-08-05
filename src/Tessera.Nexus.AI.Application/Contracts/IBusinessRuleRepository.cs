@@ -26,4 +26,7 @@ public interface IBusinessRuleRepository
     Task DeleteAsync(
         int businessRuleId,
         CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<BusinessRule>> SearchAsync(
+    string searchText,
+    CancellationToken cancellationToken = default);
 }

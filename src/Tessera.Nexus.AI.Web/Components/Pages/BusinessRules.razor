@@ -1,0 +1,244 @@
+﻿@page "/business-rules"
+
+@using Tessera.Nexus.AI.Application.Contracts
+@using Tessera.Nexus.AI.Domain.Entities
+
+@inject IBusinessRuleRepository BusinessRuleRepository
+
+<PageTitle>Business Rules</PageTitle>
+
+<h1>Business Rules</h1>
+
+@if (!string.IsNullOrWhiteSpace(_statusMessage))
+{
+    <div class="alert @(_isError ? "alert-danger" : "alert-success")">
+        @_statusMessage
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">
+        @(_isEditing ? "Edit Business Rule" : "New Business Rule")
+    </div>
+
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Rule Name</label>
+            <input class="form-control"
+                   @bind="_model.RuleName" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Rule Type</label>
+            <input class="form-control"
+                   @bind="_model.RuleType" />
+        </div>
+
+        <div class="form-check mb-3">
+            <input class="form-check-input"
+                   type="checkbox"
+                   @bind="_model.IsActive" />
+
+            <label class="form-check-label">
+                Active
+            </label>
+        </div>
+
+        <button class="btn btn-primary me-2"
+                @onclick="SaveAsync">
+            @(_isEditing ? "Update" : "Create")
+        </button>
+
+        <button class="btn btn-secondary"
+                @onclick="ResetForm">
+            Clear
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Business Rules
+    </div>
+
+    <div class="card-body">
+        @if (_isLoading)
+        {
+            <p>Loading...</p>
+        }
+        else if (_rules.Count == 0)
+        {
+            <p>No business rules found.</p>
+        }
+        else
+        {
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Id</th>
+                        <th>Rule Name</th>
+                        <th>Rule Type</th>
+                        <th>Active</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var rule in _rules)
+                    {
+                        <tr>
+                            <td>@rule.BusinessRuleId</td>
+                            <td>@rule.RuleName</td>
+                            <td>@rule.RuleType</td>
+                            <td>@rule.IsActive</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1"
+                                        @onclick="() => EditRule(rule)">
+                                    Edit
+                                </button>
+
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => DeleteAsync(rule.BusinessRuleId)">
+                                    Deactivate
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code
+{
+    private readonly List<BusinessRule> _rules = new();
+
+    private BusinessRule _model = CreateNewRule();
+
+    private bool _isEditing;
+    private bool _isLoading;
+    private bool _isError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRulesAsync();
+    }
+
+    private async Task LoadRulesAsync()
+    {
+        try
+        {
+            _isLoading = true;
+
+            var rules = await BusinessRuleRepository.GetActiveAsync();
+
+            _rules.Clear();
+            _rules.AddRange(rules.OrderBy(x => x.RuleName));
+        }
+        catch (Exception ex)
+        {
+            SetError(ex.Message);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_model.RuleName))
+            {
+                SetError("Rule Name is required.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_model.RuleType))
+            {
+                SetError("Rule Type is required.");
+                return;
+            }
+
+            if (_isEditing)
+            {
+                await BusinessRuleRepository.UpdateAsync(_model);
+
+                SetSuccess("Business rule updated.");
+            }
+            else
+            {
+                await BusinessRuleRepository.CreateAsync(_model);
+
+                SetSuccess("Business rule created.");
+            }
+
+            ResetForm();
+            await LoadRulesAsync();
+        }
+        catch (Exception ex)
+        {
+            SetError(ex.Message);
+        }
+    }
+
+    private void EditRule(BusinessRule rule)
+    {
+        _model = new BusinessRule
+        {
+            BusinessRuleId = rule.BusinessRuleId,
+            RuleName = rule.RuleName,
+            RuleType = rule.RuleType,
+            IsActive = rule.IsActive
+        };
+
+        _isEditing = true;
+    }
+
+    private async Task DeleteAsync(int businessRuleId)
+    {
+        try
+        {
+            await BusinessRuleRepository.DeleteAsync(businessRuleId);
+
+            await LoadRulesAsync();
+
+            SetSuccess("Business rule deactivated.");
+        }
+        catch (Exception ex)
+        {
+            SetError(ex.Message);
+        }
+    }
+
+    private void ResetForm()
+    {
+        _model = CreateNewRule();
+        _isEditing = false;
+    }
+
+    private static BusinessRule CreateNewRule()
+    {
+        return new BusinessRule
+        {
+            RuleName = string.Empty,
+            RuleType = string.Empty,
+            IsActive = true
+        };
+    }
+
+    private void SetSuccess(string message)
+    {
+        _isError = false;
+        _statusMessage = message;
+    }
+
+    private void SetError(string message)
+    {
+        _isError = true;
+        _statusMessage = message;
+    }
+}
