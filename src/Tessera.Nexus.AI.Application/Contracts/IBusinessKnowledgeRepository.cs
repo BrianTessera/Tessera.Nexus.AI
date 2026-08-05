@@ -8,11 +8,11 @@ public interface IBusinessKnowledgeRepository
         int businessKnowledgeId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<BusinessKnowledge>> SearchAsync(
-        string searchText,
+    Task<IReadOnlyList<BusinessKnowledge>> GetActiveAsync(
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<BusinessKnowledge>> GetActiveAsync(
+    Task<IReadOnlyList<BusinessKnowledge>> SearchAsync(
+        string searchText,
         CancellationToken cancellationToken = default);
 
     Task<int> CreateAsync(

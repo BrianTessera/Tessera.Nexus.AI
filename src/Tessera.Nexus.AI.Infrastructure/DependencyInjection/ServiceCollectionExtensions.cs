@@ -28,6 +28,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPromptTemplateRepository,
                            PromptTemplateRepository>();
 
+        services.AddScoped <IBusinessKnowledgeRepository,
+            BusinessKnowledgeRepository > ();
+
+
         return services;
     }
 }
