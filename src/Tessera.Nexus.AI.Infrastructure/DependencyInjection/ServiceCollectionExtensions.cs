@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
 using Tessera.Nexus.AI.Application.Contracts;
-
+using Tessera.Nexus.AI.Application.Services;
 using Tessera.Nexus.AI.Infrastructure.Database;
 using Tessera.Nexus.AI.Infrastructure.Repositories;
 
@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
                            DatabaseHealthCheckService>();
 
         // Repositories
+        services.AddScoped<IPromptBuilder, PromptBuilder>();
 
         services.AddScoped<IApplicationSettingRepository,
                            ApplicationSettingRepository>();
