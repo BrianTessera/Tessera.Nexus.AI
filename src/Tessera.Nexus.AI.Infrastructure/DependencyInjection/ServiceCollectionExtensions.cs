@@ -19,8 +19,11 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IDatabaseHealthCheckService,
                            DatabaseHealthCheckService>();
-        // AI Services
+        // Application Services
         services.AddScoped<IPromptBuilder, PromptBuilder>();
+        services.AddScoped<IQueryGenerationService, QueryGenerationService>();
+
+        // AI Services
         services.AddScoped<ISqlGenerator, MockSqlGenerator>();
 
         // Repositories

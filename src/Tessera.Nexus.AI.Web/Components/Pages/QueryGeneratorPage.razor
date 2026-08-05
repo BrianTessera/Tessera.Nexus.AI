@@ -1,0 +1,154 @@
+﻿@page "/query-generator"
+@rendermode InteractiveServer
+
+@using Tessera.Nexus.AI.Application.Contracts
+@using Tessera.Nexus.AI.Application.DTOs
+
+@inject IQueryGenerationService QueryGenerationService
+@using Tessera.Nexus.AI.Application.Contracts
+@using Tessera.Nexus.AI.Application.DTOs
+
+@inject IQueryGenerationService QueryGenerationService
+
+<PageTitle>Query Generator</PageTitle>
+
+<h1>AI Query Generator</h1>
+
+<p class="text-muted">
+    Test the PromptBuilder and SQL generation pipeline.
+</p>
+
+<div class="card mb-4">
+    <div class="card-header">
+        Query Request
+    </div>
+
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">
+                User Question
+            </label>
+
+            <textarea class="form-control"
+                      rows="4"
+                      @bind="_userQuestion">
+            </textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Template Name (optional)
+            </label>
+
+            <input class="form-control"
+                   @bind="_templateName" />
+        </div>
+
+        <button class="btn btn-primary"
+                @onclick="GenerateAsync"
+                disabled="@_isLoading">
+            Generate SQL
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <div class="alert alert-danger">
+        @_errorMessage
+    </div>
+}
+
+@if (_response is not null)
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            Request Summary
+        </div>
+
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">Success</dt>
+                <dd class="col-sm-9">@_response.Success</dd>
+
+                <dt class="col-sm-3">Elapsed</dt>
+                <dd class="col-sm-9">@_response.ElapsedMilliseconds ms</dd>
+
+                <dt class="col-sm-3">Processed</dt>
+                <dd class="col-sm-9">@_response.ProcessedUtc</dd>
+
+                <dt class="col-sm-3">Validated</dt>
+                <dd class="col-sm-9">@_response.SqlValidated</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            Generated Prompt
+        </div>
+
+        <div class="card-body">
+            <pre style="white-space: pre-wrap;">@_response.GeneratedPrompt</pre>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Generated SQL
+        </div>
+
+        <div class="card-body">
+            <pre>@_response.GeneratedSql</pre>
+        </div>
+    </div>
+}
+
+@code
+{
+    private string _userQuestion = string.Empty;
+    private string _templateName = string.Empty;
+
+    private bool _isLoading;
+    private string _errorMessage = string.Empty;
+
+    private QueryResponse? _response;
+
+    private async Task GenerateAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _errorMessage = string.Empty;
+            _response = null;
+
+            var request = new QueryRequest
+            {
+                UserQuestion = _userQuestion,
+                TemplateName = string.IsNullOrWhiteSpace(_templateName)
+                    ? null
+                    : _templateName,
+                ExecuteQuery = false
+            };
+
+            _response =
+                await QueryGenerationService.GenerateQueryAsync(
+                    request);
+
+            if (!_response.Success)
+            {
+                _errorMessage =
+                    _response.ErrorMessage ??
+                    "An unknown error occurred.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

@@ -8,7 +8,7 @@ public sealed class PromptBuilder : IPromptBuilder
     private readonly IPromptTemplateRepository _promptTemplateRepository;
     private readonly IBusinessKnowledgeRepository _businessKnowledgeRepository;
     private readonly IBusinessRuleRepository _businessRuleRepository;
-
+    private const string DefaultSqlTemplateName = "SqlGeneration";
     public PromptBuilder(
         IPromptTemplateRepository promptTemplateRepository,
         IBusinessKnowledgeRepository businessKnowledgeRepository,
@@ -24,7 +24,7 @@ public sealed class PromptBuilder : IPromptBuilder
         CancellationToken cancellationToken = default)
     {
         return await BuildPromptAsync(
-            "SQL Generation",
+            DefaultSqlTemplateName,
             userQuestion,
             cancellationToken);
     }
