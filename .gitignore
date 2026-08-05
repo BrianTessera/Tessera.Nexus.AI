@@ -41,3 +41,10 @@ packages/
 # Temporary files
 *.tmp
 *.bak
+
+# Copilot generated files
+CopilotSnapshot.md
+SolutionTree.txt
+BuildOutput.txt
+GitStatus.txt
+GitHistory.txt
