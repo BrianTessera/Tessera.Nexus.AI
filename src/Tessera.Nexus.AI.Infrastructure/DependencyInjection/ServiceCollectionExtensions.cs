@@ -4,7 +4,7 @@ using Tessera.Nexus.AI.Application.Contracts;
 using Tessera.Nexus.AI.Application.Services;
 using Tessera.Nexus.AI.Infrastructure.Database;
 using Tessera.Nexus.AI.Infrastructure.Repositories;
-
+using Tessera.Nexus.AI.Infrastructure.AI;
 namespace Tessera.Nexus.AI.Infrastructure.DependencyInjection;
 
 public static class ServiceCollectionExtensions
@@ -19,9 +19,11 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IDatabaseHealthCheckService,
                            DatabaseHealthCheckService>();
+        // AI Services
+        services.AddScoped<IPromptBuilder, PromptBuilder>();
+        services.AddScoped<ISqlGenerator, MockSqlGenerator>();
 
         // Repositories
-        services.AddScoped<IPromptBuilder, PromptBuilder>();
 
         services.AddScoped<IApplicationSettingRepository,
                            ApplicationSettingRepository>();
