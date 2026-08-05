@@ -1,0 +1,103 @@
+﻿@page "/prompt-templates"
+
+@using Tessera.Nexus.AI.Domain.Entities
+@using Tessera.Nexus.AI.Application.Contracts
+
+@inject IPromptTemplateRepository Repository
+
+<PageTitle>Prompt Templates</PageTitle>
+
+<h3>Prompt Templates</h3>
+
+@if (_templates is null)
+{
+    <p>Loading...</p>
+}
+else if (!_templates.Any())
+{
+    <div class="alert alert-info">
+        No prompt templates found.
+    </div>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Template Name</th>
+                <th>Type</th>
+                <th>Version</th>
+                <th>Active</th>
+                <th>Approved By</th>
+                <th>Approved Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var template in _templates)
+            {
+                <tr>
+                    <td>@template.TemplateName</td>
+                    <td>@template.TemplateType</td>
+                    <td>@template.VersionNumber</td>
+                    <td>
+                        @if (template.IsActive)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Inactive</span>
+                        }
+                    </td>
+                    <td>@template.ApprovedBy</td>
+                    <td>@template.ApprovedDateUtc?.ToString("yyyy-MM-dd HH:mm")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <hr />
+
+    <h4>Template Details</h4>
+
+    @foreach (var template in _templates)
+    {
+        <div class="card mb-3">
+            <div class="card-header">
+                <strong>@($"{template.TemplateName} (v{template.VersionNumber})")</strong>
+            </div>
+
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>Type:</strong>
+                    @template.TemplateType
+                </div>
+
+                <div class="mb-2">
+                    <strong>Created:</strong>
+                    @template.CreatedDateUtc.ToString("yyyy-MM-dd HH:mm")
+                </div>
+
+                <div class="mb-2">
+                    <strong>Template Text:</strong>
+                </div>
+
+                <pre class="bg-light p-3 border rounded">
+@template.TemplateText
+                </pre>
+            </div>
+        </div>
+    }
+}
+
+@code {
+
+    private IReadOnlyList<PromptTemplate>? _templates;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _templates =
+            await Repository.GetAllAsync();
+    }
+
+}
