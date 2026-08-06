@@ -30,9 +30,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IQueryGenerationService, QueryGenerationService>();
         services.AddScoped<ISqlValidator, SqlValidator>();
 
+
         // AI Services
         //services.AddScoped<ISqlGenerator, MockSqlGenerator>();
-
+        
         services.AddScoped<ISqlGenerator, OllamaSqlGenerator>();
 
         services.AddHttpClient<IOllamaClient, OllamaClient>(
@@ -52,6 +53,8 @@ public static class ServiceCollectionExtensions
 
         // Repositories
 
+        services.AddScoped<IMetadataContextBuilder, MetadataContextBuilder>();
+        services.AddScoped<IEpicorMetadataRepository, EpicorMetadataRepository>();
         services.AddScoped<IApplicationSettingRepository,
                            ApplicationSettingRepository>();
 

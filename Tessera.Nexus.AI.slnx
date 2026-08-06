@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <File Path="Ollama Settings.txt" />
     <Project Path="src/Tessera.Nexus.AI.Application/Tessera.Nexus.AI.Application.csproj" />
     <Project Path="src/Tessera.Nexus.AI.Audit/Tessera.Nexus.AI.Audit.csproj" />
     <Project Path="src/Tessera.Nexus.AI.Domain/Tessera.Nexus.AI.Domain.csproj" />

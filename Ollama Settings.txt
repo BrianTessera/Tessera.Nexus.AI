@@ -1,0 +1,15 @@
+Mac Ollama Host:
+2
+192.168.80.52:11434
+3
+ 
+4
+Model:
+5
+qwen3.6:35b
+6
+ 
+7
+Windows VM verified connectivity:
+8
+TcpTestSucceeded = True
