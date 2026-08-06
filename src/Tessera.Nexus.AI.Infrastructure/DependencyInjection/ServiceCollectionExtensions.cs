@@ -55,7 +55,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IQueryExecutionService, QueryExecutionService>();
 
         // Repositories
-
+        services.AddScoped<IQueryHistoryRepository, QueryHistoryRepository>();
         services.AddScoped<IMetadataContextBuilder, MetadataContextBuilder>();
         services.AddScoped<IEpicorMetadataRepository, EpicorMetadataRepository>();
         services.AddScoped<IApplicationSettingRepository,
