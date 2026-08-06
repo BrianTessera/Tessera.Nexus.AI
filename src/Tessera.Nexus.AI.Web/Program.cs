@@ -1,4 +1,5 @@
 using Tessera.Nexus.AI.Application.Contracts;
+using Tessera.Nexus.AI.Infrastructure.Configuration;
 using Tessera.Nexus.AI.Infrastructure.Database;
 using Tessera.Nexus.AI.Infrastructure.DependencyInjection;
 using Tessera.Nexus.AI.Infrastructure.Repositories;
@@ -15,6 +16,9 @@ builder.Services.AddScoped<IDatabaseHealthCheckService,
 builder.Services.AddScoped<IApplicationSettingRepository,
                    ApplicationSettingRepository>();
 
+builder.Services.Configure<OllamaSettings>(
+    builder.Configuration.GetSection(
+        OllamaSettings.SectionName));
 
 var app = builder.Build();
 
