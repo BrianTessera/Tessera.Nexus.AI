@@ -1,6 +1,7 @@
 ﻿@page "/query-generator"
 @rendermode InteractiveServer
 
+@using System.Text.Json
 @using Tessera.Nexus.AI.Application.Contracts
 @using Tessera.Nexus.AI.Application.DTOs
 
@@ -74,6 +75,24 @@
 {
     <div class="alert alert-danger">
         @_errorMessage
+    </div>
+}
+
+@if (_warnings.Count > 0)
+{
+    <div class="card border-warning mb-4">
+        <div class="card-header bg-warning-subtle">
+            SQL Validator Warnings
+        </div>
+
+        <div class="card-body">
+            <ul class="mb-0">
+                @foreach (var warning in _warnings)
+                {
+                    <li>@warning</li>
+                }
+            </ul>
+        </div>
     </div>
 }
 
@@ -156,6 +175,54 @@
         </div>
     </div>
 
+    @if (_resultTable is not null)
+    {
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Query Results</span>
+                <span class="badge bg-secondary">
+                    @_resultTable.Rows.Count row(s)
+                </span>
+            </div>
+
+            <div class="card-body">
+                @if (_resultTable.Rows.Count == 0)
+                {
+                    <div class="alert alert-info mb-0">
+                        Query executed successfully but returned no rows.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in _resultTable.Columns)
+                                    {
+                                        <th>@column</th>
+                                    }
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var row in _resultTable.Rows)
+                                {
+                                    <tr>
+                                        @foreach (var column in _resultTable.Columns)
+                                        {
+                                            <td>@FormatCellValue(row, column)</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     @if (!string.IsNullOrWhiteSpace(_response.ResultJson))
     {
         <div class="card mb-4">
@@ -191,6 +258,9 @@
     private string _errorMessage = string.Empty;
 
     private QueryResponse? _response;
+    private QueryResultTable? _resultTable;
+
+    private readonly List<string> _warnings = new();
 
     private async Task GenerateAsync()
     {
@@ -198,7 +268,11 @@
         {
             _isLoading = true;
             _errorMessage = string.Empty;
+
+            _warnings.Clear();
+
             _response = null;
+            _resultTable = null;
 
             if (string.IsNullOrWhiteSpace(_userQuestion))
             {
@@ -218,6 +292,14 @@
             _response =
                 await QueryGenerationService.GenerateQueryAsync(
                     request);
+
+            if (!string.IsNullOrWhiteSpace(_response.ResultJson))
+            {
+                _resultTable =
+                    ParseResultJson(_response.ResultJson);
+
+                ExtractWarnings(_response.ResultJson);
+            }
 
             if (!_response.Success)
             {
@@ -243,7 +325,167 @@
         _executeQuery = false;
         _errorMessage = string.Empty;
         _response = null;
+        _resultTable = null;
+
+        _warnings.Clear();
 
         return Task.CompletedTask;
+    }
+
+    private void ExtractWarnings(string resultJson)
+    {
+        _warnings.Clear();
+
+        try
+        {
+            using var document =
+                JsonDocument.Parse(resultJson);
+
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty(
+                    "Warnings",
+                    out var warningsElement))
+            {
+                return;
+            }
+
+            if (warningsElement.ValueKind != JsonValueKind.Array)
+            {
+                return;
+            }
+
+            foreach (var warning in warningsElement.EnumerateArray())
+            {
+                var value = warning.GetString();
+
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    _warnings.Add(value);
+                }
+            }
+        }
+        catch
+        {
+            // Ignore warning parsing errors.
+        }
+    }
+
+    private static QueryResultTable? ParseResultJson(
+        string resultJson)
+    {
+        if (string.IsNullOrWhiteSpace(resultJson))
+        {
+            return null;
+        }
+
+        using var document =
+            JsonDocument.Parse(resultJson);
+
+        var root =
+            document.RootElement;
+
+        var columns =
+            new List<string>();
+
+        var rows =
+            new List<Dictionary<string, string?>>();
+
+        if (root.TryGetProperty(
+                "Columns",
+                out var columnsElement))
+        {
+            foreach (var column in columnsElement.EnumerateArray())
+            {
+                var name = column.GetString();
+
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    columns.Add(name);
+                }
+            }
+        }
+
+        if (root.TryGetProperty(
+                "Rows",
+                out var rowsElement))
+        {
+            foreach (var rowElement in rowsElement.EnumerateArray())
+            {
+                var row =
+                    new Dictionary<string, string?>(
+                        StringComparer.OrdinalIgnoreCase);
+
+                foreach (var property in rowElement.EnumerateObject())
+                {
+                    row[property.Name] =
+                        FormatJsonValue(property.Value);
+                }
+
+                rows.Add(row);
+            }
+        }
+
+        return new QueryResultTable
+        {
+            Columns = columns,
+            Rows = rows
+        };
+    }
+
+    private static string FormatCellValue(
+        Dictionary<string, string?> row,
+        string column)
+    {
+        if (!row.TryGetValue(column, out var value))
+        {
+            return string.Empty;
+        }
+
+        return value ?? string.Empty;
+    }
+
+    private static string? FormatJsonValue(
+        JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String => FormatStringValue(
+                value.GetString()),
+            JsonValueKind.Number => value.ToString(),
+            JsonValueKind.True => "True",
+            JsonValueKind.False => "False",
+            _ => value.ToString()
+        };
+    }
+
+    private static string? FormatStringValue(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        if (DateTime.TryParse(
+                value,
+                out var dateValue))
+        {
+            return dateValue.TimeOfDay == TimeSpan.Zero
+                ? dateValue.ToString("yyyy-MM-dd")
+                : dateValue.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        return value;
+    }
+
+    private sealed class QueryResultTable
+    {
+        public IReadOnlyList<string> Columns { get; set; } =
+            Array.Empty<string>();
+
+        public IReadOnlyList<Dictionary<string, string?>> Rows { get; set; } =
+            Array.Empty<Dictionary<string, string?>>();
     }
 }
