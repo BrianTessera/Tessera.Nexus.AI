@@ -8,6 +8,7 @@ using Tessera.Nexus.AI.Infrastructure.AI;
 using Tessera.Nexus.AI.Infrastructure.Configuration;
 using Tessera.Nexus.AI.Infrastructure.Database;
 using Tessera.Nexus.AI.Infrastructure.Repositories;
+using Tessera.Nexus.AI.Infrastructure.Services;
 namespace Tessera.Nexus.AI.Infrastructure.DependencyInjection;
 
 public static class ServiceCollectionExtensions
@@ -50,6 +51,8 @@ public static class ServiceCollectionExtensions
                 httpClient.Timeout =
                     TimeSpan.FromSeconds(settings.TimeoutSeconds);
             });
+        // Query Execution
+        services.AddScoped<IQueryExecutionService, QueryExecutionService>();
 
         // Repositories
 

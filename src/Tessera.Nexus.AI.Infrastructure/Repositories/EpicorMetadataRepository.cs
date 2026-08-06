@@ -266,20 +266,27 @@ public sealed class EpicorMetadataRepository : IEpicorMetadataRepository
         return results.ToList();
     }
 
-    public async Task<EpicorMetadataContext> GetMetadataContextAsync(
+    public async Task<IReadOnlyList<EpicorDataField>> GetRelevantFieldsAsync(
         string userQuestion,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(userQuestion))
+        {
+            return Array.Empty<EpicorDataField>();
+        }
+
         var tables =
             await GetRelevantTablesAsync(
                 userQuestion,
                 cancellationToken);
 
+        if (tables.Count == 0)
+        {
+            return Array.Empty<EpicorDataField>();
+        }
+
         var allFields =
             new List<EpicorDataField>();
-
-        var allRelationships =
-            new List<EpicorRelation>();
 
         foreach (var table in tables)
         {
@@ -295,22 +302,108 @@ public sealed class EpicorMetadataRepository : IEpicorMetadataRepository
                     table.DbTableName,
                     cancellationToken);
 
+            allFields.AddRange(fields);
+        }
+
+        if (allFields.Count == 0)
+        {
+            return Array.Empty<EpicorDataField>();
+        }
+
+        var relevantFieldNames =
+            GetLikelyFieldNames(userQuestion);
+
+        var selectedFields =
+            allFields
+                .Where(field =>
+                    IsCoreField(field.FieldName) ||
+                    relevantFieldNames.Contains(field.FieldName))
+                .GroupBy(field =>
+                    new
+                    {
+                        field.DataTableId,
+                        field.FieldName
+                    })
+                .Select(group => group.First())
+                .OrderBy(field => field.DataTableId)
+                .ThenBy(field => GetFieldRank(field.FieldName))
+                .ThenBy(field => field.FieldName)
+                .ToList();
+
+        if (selectedFields.Count > 0)
+        {
+            return LimitFieldsPerTable(
+                selectedFields,
+                maxFieldsPerTable: 30);
+        }
+
+        return LimitFieldsPerTable(
+            allFields,
+            maxFieldsPerTable: 20);
+    }
+
+    public async Task<EpicorMetadataContext> GetMetadataContextAsync(
+        string userQuestion,
+        CancellationToken cancellationToken = default)
+    {
+        var tables =
+            await GetRelevantTablesAsync(
+                userQuestion,
+                cancellationToken);
+
+        var fields =
+            await GetRelevantFieldsAsync(
+                userQuestion,
+                cancellationToken);
+
+        var allRelationships =
+            new List<EpicorRelation>();
+
+        foreach (var table in tables)
+        {
+            if (string.IsNullOrWhiteSpace(table.SchemaName) ||
+                string.IsNullOrWhiteSpace(table.DbTableName))
+            {
+                continue;
+            }
+
             var relationships =
                 await GetRelationshipsAsync(
                     table.SchemaName,
                     table.DbTableName,
                     cancellationToken);
 
-            allFields.AddRange(fields);
             allRelationships.AddRange(relationships);
         }
+
+        var distinctRelationships =
+            allRelationships
+                .GroupBy(relationship => relationship.RelationId)
+                .Select(group => group.First())
+                .OrderBy(relationship => relationship.RelationId)
+                .Take(30)
+                .ToList();
 
         return new EpicorMetadataContext
         {
             Tables = tables,
-            Fields = allFields,
-            Relationships = allRelationships
+            Fields = fields,
+            Relationships = distinctRelationships
         };
+    }
+
+    private static IReadOnlyList<EpicorDataField> LimitFieldsPerTable(
+        IEnumerable<EpicorDataField> fields,
+        int maxFieldsPerTable)
+    {
+        return fields
+            .GroupBy(field => field.DataTableId)
+            .SelectMany(group =>
+                group
+                    .OrderBy(field => GetFieldRank(field.FieldName))
+                    .ThenBy(field => field.FieldName)
+                    .Take(maxFieldsPerTable))
+            .ToList();
     }
 
     private static IReadOnlyList<string> GetLikelyTableNames(
@@ -427,6 +520,255 @@ public sealed class EpicorMetadataRepository : IEpicorMetadataRepository
         }
 
         return tables.ToList();
+    }
+
+    private static IReadOnlySet<string> GetLikelyFieldNames(
+        string userQuestion)
+    {
+        var normalized =
+            userQuestion.Trim().ToLowerInvariant();
+
+        var fields =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        AddCommonFields(fields);
+
+        if (ContainsAny(
+                normalized,
+                "shipment",
+                "shipments",
+                "ship",
+                "shipped",
+                "pack",
+                "packnum",
+                "pack number",
+                "shipment number",
+                "shipment numbers",
+                "packing slip",
+                "pack slip"))
+        {
+            AddFields(
+                fields,
+                "PackNum",
+                "PackLine",
+                "ShipDate",
+                "CustNum",
+                "ShipToNum",
+                "ShipToCustNum",
+                "ReadyToInvoice",
+                "Invoiced",
+                "EntryPerson",
+                "TrackingNumber",
+                "ShipViaCode",
+                "ShipStatus",
+                "Plant");
+        }
+
+        if (ContainsAny(
+                normalized,
+                "customer",
+                "customers",
+                "custnum",
+                "custid",
+                "cust id",
+                "sold to"))
+        {
+            AddFields(
+                fields,
+                "CustNum",
+                "CustID",
+                "Name",
+                "BTName",
+                "ShipToNum",
+                "City",
+                "State",
+                "Country",
+                "TermsCode",
+                "SalesRepCode");
+        }
+
+        if (ContainsAny(
+                normalized,
+                "value",
+                "amount",
+                "total",
+                "revenue",
+                "sales",
+                "price",
+                "extended",
+                "dollars",
+                "cost"))
+        {
+            AddFields(
+                fields,
+                "DocExtPrice",
+                "ExtPrice",
+                "DocInExtPrice",
+                "InExtPrice",
+                "DocUnitPrice",
+                "UnitPrice",
+                "OrderAmt",
+                "DocOrderAmt",
+                "TotalTax",
+                "DocTotalTax",
+                "TotalDiscount",
+                "DocTotalDiscount",
+                "SellingInventoryShipQty",
+                "OurInventoryShipQty");
+        }
+
+        if (ContainsAny(
+                normalized,
+                "part",
+                "parts",
+                "partnum",
+                "part number",
+                "inventory",
+                "item"))
+        {
+            AddFields(
+                fields,
+                "PartNum",
+                "PartDescription",
+                "LineDesc",
+                "TypeCode",
+                "IUM",
+                "PUM",
+                "ClassID",
+                "WarehouseCode",
+                "BinNum",
+                "OnhandQty");
+        }
+
+        if (ContainsAny(
+                normalized,
+                "job",
+                "jobs",
+                "jobnum",
+                "job number",
+                "labor",
+                "operation",
+                "operations",
+                "earned hours",
+                "actual hours"))
+        {
+            AddFields(
+                fields,
+                "JobNum",
+                "AssemblySeq",
+                "OprSeq",
+                "OpCode",
+                "ActProdHours",
+                "ProdStandard",
+                "LaborQty",
+                "LaborHrs",
+                "PartNum",
+                "ProdQty",
+                "QtyCompleted",
+                "JobClosed",
+                "JobComplete");
+        }
+
+        if (ContainsAny(
+                normalized,
+                "order",
+                "orders",
+                "sales order",
+                "release",
+                "releases",
+                "ordernum"))
+        {
+            AddFields(
+                fields,
+                "OrderNum",
+                "OrderLine",
+                "OrderRelNum",
+                "OrderDate",
+                "NeedByDate",
+                "RequestDate",
+                "OpenOrder",
+                "OpenLine",
+                "OpenRelease");
+        }
+
+        if (ContainsAny(
+                normalized,
+                "invoice",
+                "invoices",
+                "billing",
+                "billed"))
+        {
+            AddFields(
+                fields,
+                "InvoiceNum",
+                "InvoiceLine",
+                "InvoiceDate",
+                "DocInvoiceAmt",
+                "InvoiceAmt",
+                "PackNum",
+                "PackLine");
+        }
+
+        return fields;
+    }
+
+    private static void AddCommonFields(
+        HashSet<string> fields)
+    {
+        AddFields(
+            fields,
+            "Company",
+            "SysRowID");
+    }
+
+    private static void AddFields(
+        HashSet<string> fields,
+        params string[] fieldNames)
+    {
+        foreach (var fieldName in fieldNames)
+        {
+            fields.Add(fieldName);
+        }
+    }
+
+    private static bool IsCoreField(
+        string fieldName)
+    {
+        return fieldName.Equals(
+                   "Company",
+                   StringComparison.OrdinalIgnoreCase)
+               || fieldName.Equals(
+                   "SysRowID",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int GetFieldRank(
+        string fieldName)
+    {
+        return fieldName.ToUpperInvariant() switch
+        {
+            "COMPANY" => 0,
+            "PACKNUM" => 1,
+            "SHIPDATE" => 2,
+            "CUSTNUM" => 3,
+            "CUSTID" => 4,
+            "NAME" => 5,
+            "PARTNUM" => 6,
+            "ORDERNUM" => 7,
+            "ORDERLINE" => 8,
+            "ORDERRELNUM" => 9,
+            "PACKLINE" => 10,
+            "DOCEXTPRICE" => 11,
+            "EXTPRICE" => 12,
+            "DOCORDERAMT" => 13,
+            "ORDERAMT" => 14,
+            "JOBNUM" => 15,
+            "ACTPRODHOURS" => 16,
+            "PRODSTANDARD" => 17,
+            "SYSROWID" => 99,
+            _ => 50
+        };
     }
 
     private static bool ContainsAny(

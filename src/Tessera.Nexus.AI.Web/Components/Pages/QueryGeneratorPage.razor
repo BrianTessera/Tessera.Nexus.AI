@@ -4,8 +4,6 @@
 @using Tessera.Nexus.AI.Application.Contracts
 @using Tessera.Nexus.AI.Application.DTOs
 
-
-
 @inject IQueryGenerationService QueryGenerationService
 
 <PageTitle>Query Generator</PageTitle>
@@ -13,7 +11,7 @@
 <h1>AI Query Generator</h1>
 
 <p class="text-muted">
-    Test the PromptBuilder and SQL generation pipeline.
+    Generate Epicor-aware SQL using prompt templates, business rules, business knowledge, metadata grounding, and Ollama.
 </p>
 
 <div class="card mb-4">
@@ -23,29 +21,51 @@
 
     <div class="card-body">
         <div class="mb-3">
-            <label class="form-label">
+            <label class="form-label" for="userQuestion">
                 User Question
             </label>
 
-            <textarea class="form-control"
+            <textarea id="userQuestion"
+                      class="form-control"
                       rows="4"
                       @bind="_userQuestion">
             </textarea>
         </div>
 
         <div class="mb-3">
-            <label class="form-label">
+            <label class="form-label" for="templateName">
                 Template Name (optional)
             </label>
 
-            <input class="form-control"
-                   @bind="_templateName" />
+            <input id="templateName"
+                   class="form-control"
+                   @bind="_templateName"
+                   placeholder="Defaults to SqlGeneration" />
+        </div>
+
+        <div class="form-check mb-3">
+            <input id="executeQuery"
+                   class="form-check-input"
+                   type="checkbox"
+                   @bind="_executeQuery" />
+
+            <label class="form-check-label" for="executeQuery">
+                Execute query after SQL is generated and validated
+            </label>
         </div>
 
         <button class="btn btn-primary"
+                type="button"
                 @onclick="GenerateAsync"
                 disabled="@_isLoading">
-            Generate SQL
+            @(_isLoading ? "Generating..." : "Generate SQL")
+        </button>
+
+        <button class="btn btn-outline-secondary ms-2"
+                type="button"
+                @onclick="ClearAsync"
+                disabled="@_isLoading">
+            Clear
         </button>
     </div>
 </div>
@@ -67,7 +87,40 @@
         <div class="card-body">
             <dl class="row">
                 <dt class="col-sm-3">Success</dt>
-                <dd class="col-sm-9">@_response.Success</dd>
+                <dd class="col-sm-9">
+                    @if (_response.Success)
+                    {
+                        <span class="badge bg-success">True</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">False</span>
+                    }
+                </dd>
+
+                <dt class="col-sm-3">SQL Validated</dt>
+                <dd class="col-sm-9">
+                    @if (_response.SqlValidated)
+                    {
+                        <span class="badge bg-success">True</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">False</span>
+                    }
+                </dd>
+
+                <dt class="col-sm-3">Query Executed</dt>
+                <dd class="col-sm-9">
+                    @if (_executeQuery)
+                    {
+                        <span class="badge bg-info text-dark">Requested</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Not Requested</span>
+                    }
+                </dd>
 
                 <dt class="col-sm-3">Elapsed</dt>
                 <dd class="col-sm-9">@_response.ElapsedMilliseconds ms</dd>
@@ -75,11 +128,46 @@
                 <dt class="col-sm-3">Processed</dt>
                 <dd class="col-sm-9">@_response.ProcessedUtc</dd>
 
-                <dt class="col-sm-3">Validated</dt>
-                <dd class="col-sm-9">@_response.SqlValidated</dd>
+                <dt class="col-sm-3">Row Count</dt>
+                <dd class="col-sm-9">
+                    @(_response.RowCount.HasValue
+                        ? _response.RowCount.Value.ToString()
+                        : "N/A")
+                </dd>
+
+                @if (!string.IsNullOrWhiteSpace(_response.ErrorMessage))
+                {
+                    <dt class="col-sm-3">Error</dt>
+                    <dd class="col-sm-9 text-danger">
+                        @_response.ErrorMessage
+                    </dd>
+                }
             </dl>
         </div>
     </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            Generated SQL
+        </div>
+
+        <div class="card-body">
+            <pre class="mb-0">@_response.GeneratedSql</pre>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_response.ResultJson))
+    {
+        <div class="card mb-4">
+            <div class="card-header">
+                Execution Result JSON
+            </div>
+
+            <div class="card-body">
+                <pre style="white-space: pre-wrap;">@_response.ResultJson</pre>
+            </div>
+        </div>
+    }
 
     <div class="card mb-4">
         <div class="card-header">
@@ -90,16 +178,6 @@
             <pre style="white-space: pre-wrap;">@_response.GeneratedPrompt</pre>
         </div>
     </div>
-
-    <div class="card">
-        <div class="card-header">
-            Generated SQL
-        </div>
-
-        <div class="card-body">
-            <pre>@_response.GeneratedSql</pre>
-        </div>
-    </div>
 }
 
 @code
@@ -107,7 +185,9 @@
     private string _userQuestion = string.Empty;
     private string _templateName = string.Empty;
 
+    private bool _executeQuery;
     private bool _isLoading;
+
     private string _errorMessage = string.Empty;
 
     private QueryResponse? _response;
@@ -120,13 +200,19 @@
             _errorMessage = string.Empty;
             _response = null;
 
+            if (string.IsNullOrWhiteSpace(_userQuestion))
+            {
+                _errorMessage = "User Question is required.";
+                return;
+            }
+
             var request = new QueryRequest
             {
-                UserQuestion = _userQuestion,
+                UserQuestion = _userQuestion.Trim(),
                 TemplateName = string.IsNullOrWhiteSpace(_templateName)
                     ? null
-                    : _templateName,
-                ExecuteQuery = false
+                    : _templateName.Trim(),
+                ExecuteQuery = _executeQuery
             };
 
             _response =
@@ -148,5 +234,16 @@
         {
             _isLoading = false;
         }
+    }
+
+    private Task ClearAsync()
+    {
+        _userQuestion = string.Empty;
+        _templateName = string.Empty;
+        _executeQuery = false;
+        _errorMessage = string.Empty;
+        _response = null;
+
+        return Task.CompletedTask;
     }
 }

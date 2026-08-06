@@ -8,14 +8,14 @@ namespace Tessera.Nexus.AI.Application.Contracts;
 public interface IEpicorMetadataRepository
 {
     /// <summary>
-    /// Searches metadata using a natural language term or keyword.
+    /// Searches Epicor tables using a keyword or natural language term.
     /// </summary>
     Task<IReadOnlyList<EpicorDataTable>> SearchTablesAsync(
         string searchText,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets metadata for a specific table.
+    /// Gets metadata for a specific Epicor table.
     /// </summary>
     Task<EpicorDataTable?> GetTableAsync(
         string schemaName,
@@ -23,7 +23,7 @@ public interface IEpicorMetadataRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets fields for a specific Epicor table.
+    /// Gets all fields for a specific Epicor table.
     /// </summary>
     Task<IReadOnlyList<EpicorDataField>> GetFieldsAsync(
         string schemaName,
@@ -31,7 +31,7 @@ public interface IEpicorMetadataRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets relationships for a specific Epicor table.
+    /// Gets relationship metadata for a specific Epicor table.
     /// </summary>
     Task<IReadOnlyList<EpicorRelation>> GetRelationshipsAsync(
         string schemaName,
@@ -40,15 +40,24 @@ public interface IEpicorMetadataRepository
 
     /// <summary>
     /// Gets likely relevant tables for a user question.
-    /// This is intended for AI prompt grounding.
+    /// This is used for AI prompt grounding.
     /// </summary>
     Task<IReadOnlyList<EpicorDataTable>> GetRelevantTablesAsync(
         string userQuestion,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets a full metadata bundle for a user question, including
-    /// matching tables, fields, and relationships.
+    /// Gets likely relevant fields for a user question.
+    /// This should return a smaller, ranked set of fields rather than
+    /// every column from every relevant table.
+    /// </summary>
+    Task<IReadOnlyList<EpicorDataField>> GetRelevantFieldsAsync(
+        string userQuestion,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a metadata bundle for a user question, including
+    /// relevant tables, relevant fields, and relationships.
     /// </summary>
     Task<EpicorMetadataContext> GetMetadataContextAsync(
         string userQuestion,

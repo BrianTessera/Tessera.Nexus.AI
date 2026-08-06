@@ -45,22 +45,51 @@ public sealed class SqlValidator : ISqlValidator
             return result;
         }
 
-        var normalizedSql = NormalizeSql(sql);
+        var normalizedSql =
+            NormalizeSql(sql);
 
-        ValidateLeadingStatement(normalizedSql, result);
+        ValidateLeadingStatement(
+            normalizedSql,
+            result);
 
-        ValidateProhibitedKeywords(normalizedSql, result);
+        ValidateProhibitedKeywords(
+            normalizedSql,
+            result);
 
-        ValidateMultiStatement(normalizedSql, result);
+        ValidateMultiStatement(
+            normalizedSql,
+            result);
 
-        ValidateSelectStar(normalizedSql, result);
+        ValidateSelectStar(
+            normalizedSql,
+            result);
 
-        result.IsValid = result.Violations.Count == 0;
+        ValidateCustomerEqualityFilter(
+            normalizedSql,
+            result);
 
-        if (!result.IsValid && string.IsNullOrWhiteSpace(result.ErrorMessage))
+        ValidateShipmentFilterHints(
+            normalizedSql,
+            result);
+
+        ValidateCompanyJoinHints(
+            normalizedSql,
+            result);
+
+        ValidateLiteralStringFilters(
+            normalizedSql,
+            result);
+
+        result.IsValid =
+            result.Violations.Count == 0;
+
+        if (!result.IsValid &&
+            string.IsNullOrWhiteSpace(result.ErrorMessage))
         {
             result.ErrorMessage =
-                string.Join(Environment.NewLine, result.Violations);
+                string.Join(
+                    Environment.NewLine,
+                    result.Violations);
         }
 
         return result;
@@ -70,12 +99,16 @@ public sealed class SqlValidator : ISqlValidator
         string sql,
         SqlValidationResult result)
     {
-        if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+        if (sql.StartsWith(
+                "SELECT",
+                StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        if (sql.StartsWith("WITH", StringComparison.OrdinalIgnoreCase))
+        if (sql.StartsWith(
+                "WITH",
+                StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -93,16 +126,19 @@ public sealed class SqlValidator : ISqlValidator
     {
         foreach (var keyword in ProhibitedKeywords)
         {
-            var pattern = $@"\b{Regex.Escape(keyword)}\b";
+            var pattern =
+                $@"\b{Regex.Escape(keyword)}\b";
 
-            if (Regex.IsMatch(
-                sql,
-                pattern,
-                RegexOptions.IgnoreCase))
+            if (!Regex.IsMatch(
+                    sql,
+                    pattern,
+                    RegexOptions.IgnoreCase))
             {
-                result.Violations.Add(
-                    $"Prohibited keyword detected: {keyword}");
+                continue;
             }
+
+            result.Violations.Add(
+                $"Prohibited keyword detected: {keyword}");
         }
     }
 
@@ -113,28 +149,154 @@ public sealed class SqlValidator : ISqlValidator
         var statementCount =
             sql.Count(character => character == ';');
 
-        if (statementCount > 1)
+        if (statementCount <= 1)
         {
-            result.Violations.Add(
-                "Multiple SQL statements are not allowed.");
+            return;
         }
+
+        result.Violations.Add(
+            "Multiple SQL statements are not allowed.");
     }
 
     private static void ValidateSelectStar(
         string sql,
         SqlValidationResult result)
     {
-        if (Regex.IsMatch(
-            sql,
-            @"SELECT\s+\*",
-            RegexOptions.IgnoreCase))
+        if (!Regex.IsMatch(
+                sql,
+                @"SELECT\s+\*",
+                RegexOptions.IgnoreCase))
         {
+            return;
+        }
+
+        result.Warnings.Add(
+            "SELECT * detected. Explicit column lists are recommended.");
+    }
+
+    private static void ValidateCustomerEqualityFilter(
+        string sql,
+        SqlValidationResult result)
+    {
+        var customerNameEqualityPatterns =
+            new[]
+            {
+                @"Customer\.Name\s*=\s*'[^']+'",
+                @"\bName\s*=\s*'[^']+'"
+            };
+
+        foreach (var pattern in customerNameEqualityPatterns)
+        {
+            if (!Regex.IsMatch(
+                    sql,
+                    pattern,
+                    RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
             result.Warnings.Add(
-                "SELECT * detected. Explicit column lists are recommended.");
+                """
+                Customer name equality filter detected.
+                Consider using LIKE '%value%'
+                because customer names are often partial matches.
+                """);
+
+            return;
         }
     }
 
-    private static string NormalizeSql(string sql)
+    private static void ValidateShipmentFilterHints(
+        string sql,
+        SqlValidationResult result)
+    {
+        if (Regex.IsMatch(
+                sql,
+                @"ShipToNum\s*=\s*'[^']+'",
+                RegexOptions.IgnoreCase))
+        {
+            result.Warnings.Add(
+                """
+                ShipToNum appears to be filtered using a literal name.
+                Verify the value is truly a ShipToNum and not a customer name.
+                Consider Customer.Name or Customer.CustID instead.
+                """);
+        }
+
+        if (Regex.IsMatch(
+                sql,
+                @"PackNum\s*LIKE",
+                RegexOptions.IgnoreCase))
+        {
+            result.Warnings.Add(
+                """
+                Shipment numbers are normally exact values.
+                Consider PackNum = value instead of LIKE.
+                """);
+        }
+    }
+
+    private static void ValidateCompanyJoinHints(
+        string sql,
+        SqlValidationResult result)
+    {
+        var containsCustomerJoin =
+            Regex.IsMatch(
+                sql,
+                @"JOIN\s+.*Customer",
+                RegexOptions.IgnoreCase);
+
+        if (!containsCustomerJoin)
+        {
+            return;
+        }
+
+        var containsCompanyJoin =
+            Regex.IsMatch(
+                sql,
+                @"Company\s*=\s*.*Company",
+                RegexOptions.IgnoreCase);
+
+        if (containsCompanyJoin)
+        {
+            return;
+        }
+
+        result.Warnings.Add(
+            """
+            Customer join does not appear to include Company.
+            Epicor joins should typically include Company
+            in addition to CustNum.
+            """);
+    }
+
+    private static void ValidateLiteralStringFilters(
+        string sql,
+        SqlValidationResult result)
+    {
+        var matches =
+            Regex.Matches(
+                sql,
+                @"=\s*'([^']+)'",
+                RegexOptions.IgnoreCase);
+
+        foreach (Match match in matches)
+        {
+            var value =
+                match.Groups[1].Value;
+
+            if (value.Length < 4)
+            {
+                continue;
+            }
+
+            result.Warnings.Add(
+                $"Literal text filter detected: '{value}'. Verify exact match is intended.");
+        }
+    }
+
+    private static string NormalizeSql(
+        string sql)
     {
         return sql
             .Replace("\r", " ")
