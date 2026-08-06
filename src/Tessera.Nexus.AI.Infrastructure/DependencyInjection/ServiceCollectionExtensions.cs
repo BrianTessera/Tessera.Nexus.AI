@@ -23,8 +23,10 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IDatabaseHealthCheckService,
                            DatabaseHealthCheckService>();
+
         // Application Services
         services.AddScoped<IPromptBuilder, PromptBuilder>();
+        services.AddScoped<IMetadataContextBuilder, MetadataContextBuilder>();
         services.AddScoped<IQueryGenerationService, QueryGenerationService>();
         services.AddScoped<ISqlValidator, SqlValidator>();
 
