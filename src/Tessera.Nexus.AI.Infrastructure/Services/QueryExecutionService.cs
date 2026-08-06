@@ -90,7 +90,7 @@ public sealed class QueryExecutionService : IQueryExecutionService
 
             result.Columns = columns;
             result.Rows = rows;
-            result.RowCount = rows.Count;
+            result.ResultRowCount = rows.Count;
             result.Success = true;
 
             return result;

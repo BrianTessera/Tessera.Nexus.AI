@@ -36,7 +36,7 @@ public sealed class QueryExecutionResult
     /// <summary>
     /// Number of rows returned.
     /// </summary>
-    public int RowCount { get; set; }
+    public int ResultRowCount { get; set; }
 
     /// <summary>
     /// Query execution duration in milliseconds.

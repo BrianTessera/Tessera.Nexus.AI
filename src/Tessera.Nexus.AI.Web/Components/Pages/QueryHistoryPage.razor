@@ -1,0 +1,445 @@
+﻿@page "/query-history"
+@rendermode InteractiveServer
+
+@using Tessera.Nexus.AI.Application.Contracts
+@using Tessera.Nexus.AI.Domain.Entities
+
+@inject IQueryHistoryRepository QueryHistoryRepository
+
+<PageTitle>Query History</PageTitle>
+
+<h1>Query History</h1>
+
+<p class="text-muted">
+    Review generated prompts, generated SQL, validation status, execution status, row counts, errors, and result payloads.
+</p>
+
+<div class="card mb-4">
+    <div class="card-header">
+        Filters
+    </div>
+
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-5">
+                <label class="form-label" for="searchText">
+                    Search Question
+                </label>
+
+                <input id="searchText"
+                       class="form-control"
+                       @bind="_searchText"
+                       placeholder="Search user question text" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label" for="filterMode">
+                    Filter
+                </label>
+
+                <select id="filterMode"
+                        class="form-select"
+                        @bind="_filterMode">
+                    <option value="recent">Recent</option>
+                    <option value="successful">Successful</option>
+                    <option value="failed">Failed</option>
+                    <option value="search">Search</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label" for="take">
+                    Take
+                </label>
+
+                <input id="take"
+                       class="form-control"
+                       type="number"
+                       min="1"
+                       max="1000"
+                       @bind="_take" />
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-primary w-100"
+                        type="button"
+                        @onclick="LoadHistoryAsync"
+                        disabled="@_isLoading">
+                    @(_isLoading ? "Loading..." : "Refresh")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <div class="alert alert-danger">
+        @_errorMessage
+    </div>
+}
+
+@if (_isLoading)
+{
+    <div class="alert alert-info">
+        Loading query history...
+    </div>
+}
+else if (_history.Count == 0)
+{
+    <div class="alert alert-secondary">
+        No query history records found.
+    </div>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>History Records</span>
+            <span class="badge bg-secondary">@_history.Count record(s)</span>
+        </div>
+
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 90px;">Id</th>
+                            <th>Question</th>
+                            <th style="width: 110px;">Success</th>
+                            <th style="width: 120px;">Validated</th>
+                            <th style="width: 120px;">Executed</th>
+                            <th style="width: 100px;">Rows</th>
+                            <th style="width: 140px;">Elapsed</th>
+                            <th style="width: 190px;">Created UTC</th>
+                            <th style="width: 120px;"></th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in _history)
+                        {
+                            <tr class="@GetRowCssClass(item)">
+                                <td>@item.QueryHistoryId</td>
+
+                                <td>
+                                    <div class="fw-semibold">
+                                        @item.UserQuestion
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(item.ErrorMessage))
+                                    {
+                                        <div class="small text-danger">
+                                            @Truncate(item.ErrorMessage, 160)
+                                        </div>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (item.WasSuccessful)
+                                    {
+                                        <span class="badge bg-success">True</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">False</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (item.SqlValidated)
+                                    {
+                                        <span class="badge bg-success">True</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">False</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (item.QueryExecuted)
+                                    {
+                                        <span class="badge bg-info text-dark">True</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">False</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @(item.ResultResultRowCount.HasValue
+                                        ? item.ResultResultRowCount.Value.ToString()
+                                        : "N/A")
+                                </td>
+
+                                <td>
+                                    @(item.GenerationElapsedMilliseconds.HasValue
+                                        ? $"{item.GenerationElapsedMilliseconds.Value} ms"
+                                        : "N/A")
+                                </td>
+
+                                <td>
+                                    @item.CreatedDateUtc.ToString("yyyy-MM-dd HH:mm:ss")
+                                </td>
+
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary"
+                                            type="button"
+                                            @onclick="() => SelectHistory(item)">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_selectedHistory is not null)
+{
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Selected Query Details</span>
+
+            <button class="btn btn-sm btn-outline-secondary"
+                    type="button"
+                    @onclick="ClearSelection">
+                Close
+            </button>
+        </div>
+
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">Query History Id</dt>
+                <dd class="col-sm-9">@_selectedHistory.QueryHistoryId</dd>
+
+                <dt class="col-sm-3">Question</dt>
+                <dd class="col-sm-9">@_selectedHistory.UserQuestion</dd>
+
+                <dt class="col-sm-3">Template Name</dt>
+                <dd class="col-sm-9">@DisplayNullable(_selectedHistory.TemplateName)</dd>
+
+                <dt class="col-sm-3">Prompt Template Name</dt>
+                <dd class="col-sm-9">@DisplayNullable(_selectedHistory.PromptTemplateName)</dd>
+
+                <dt class="col-sm-3">Model Name</dt>
+                <dd class="col-sm-9">@DisplayNullable(_selectedHistory.ModelName)</dd>
+
+                <dt class="col-sm-3">Requested By</dt>
+                <dd class="col-sm-9">@DisplayNullable(_selectedHistory.RequestedBy)</dd>
+
+                <dt class="col-sm-3">Source Page</dt>
+                <dd class="col-sm-9">@DisplayNullable(_selectedHistory.SourcePage)</dd>
+
+                <dt class="col-sm-3">Success</dt>
+                <dd class="col-sm-9">@_selectedHistory.WasSuccessful</dd>
+
+                <dt class="col-sm-3">SQL Validated</dt>
+                <dd class="col-sm-9">@_selectedHistory.SqlValidated</dd>
+
+                <dt class="col-sm-3">Query Executed</dt>
+                <dd class="col-sm-9">@_selectedHistory.QueryExecuted</dd>
+
+                <dt class="col-sm-3">Row Count</dt>
+                <dd class="col-sm-9">
+                    @(_selectedHistory.ResultResultRowCount.HasValue
+                        ? _selectedHistory.ResultResultRowCount.Value.ToString()
+                        : "N/A")
+                </dd>
+
+                <dt class="col-sm-3">Generation Elapsed</dt>
+                <dd class="col-sm-9">
+                    @(_selectedHistory.GenerationElapsedMilliseconds.HasValue
+                        ? $"{_selectedHistory.GenerationElapsedMilliseconds.Value} ms"
+                        : "N/A")
+                </dd>
+
+                <dt class="col-sm-3">Execution Elapsed</dt>
+                <dd class="col-sm-9">
+                    @(_selectedHistory.ExecutionElapsedMilliseconds.HasValue
+                        ? $"{_selectedHistory.ExecutionElapsedMilliseconds.Value} ms"
+                        : "N/A")
+                </dd>
+
+                <dt class="col-sm-3">Created UTC</dt>
+                <dd class="col-sm-9">
+                    @_selectedHistory.CreatedDateUtc.ToString("yyyy-MM-dd HH:mm:ss")
+                </dd>
+
+                @if (!string.IsNullOrWhiteSpace(_selectedHistory.ErrorMessage))
+                {
+                    <dt class="col-sm-3">Error</dt>
+                    <dd class="col-sm-9 text-danger">
+                        @_selectedHistory.ErrorMessage
+                    </dd>
+                }
+            </dl>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            Generated SQL
+        </div>
+
+        <div class="card-body">
+            <pre class="mb-0">@_selectedHistory.GeneratedSql</pre>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_selectedHistory.ResultJson))
+    {
+        <div class="card mb-4">
+            <div class="card-header">
+                Result JSON
+            </div>
+
+            <div class="card-body">
+                <pre style="white-space: pre-wrap;">@_selectedHistory.ResultJson</pre>
+            </div>
+        </div>
+    }
+
+    <div class="card mb-4">
+        <div class="card-header">
+            Generated Prompt
+        </div>
+
+        <div class="card-body">
+            <pre style="white-space: pre-wrap;">@_selectedHistory.GeneratedPrompt</pre>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_selectedHistory.MetadataContextSummary))
+    {
+        <div class="card mb-4">
+            <div class="card-header">
+                Metadata Context Summary
+            </div>
+
+            <div class="card-body">
+                <pre style="white-space: pre-wrap;">@_selectedHistory.MetadataContextSummary</pre>
+            </div>
+        </div>
+    }
+}
+
+@code
+{
+    private readonly List<QueryHistory> _history = new();
+
+    private QueryHistory? _selectedHistory;
+
+    private bool _isLoading;
+
+    private string _errorMessage = string.Empty;
+    private string _searchText = string.Empty;
+    private string _filterMode = "recent";
+
+    private int _take = 100;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _errorMessage = string.Empty;
+            _selectedHistory = null;
+
+            IReadOnlyList<QueryHistory> results =
+                _filterMode switch
+                {
+                    "successful" => await QueryHistoryRepository.GetSuccessfulAsync(
+                        NormalizeTake(_take)),
+
+                    "failed" => await QueryHistoryRepository.GetFailedAsync(
+                        NormalizeTake(_take)),
+
+                    "search" => await QueryHistoryRepository.SearchByQuestionAsync(
+                        _searchText,
+                        NormalizeTake(_take)),
+
+                    _ => await QueryHistoryRepository.GetRecentAsync(
+                        NormalizeTake(_take))
+                };
+
+            _history.Clear();
+            _history.AddRange(results);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage =
+                $"Unable to load query history. {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void SelectHistory(QueryHistory queryHistory)
+    {
+        _selectedHistory = queryHistory;
+    }
+
+    private void ClearSelection()
+    {
+        _selectedHistory = null;
+    }
+
+    private static int NormalizeTake(int take)
+    {
+        if (take <= 0)
+        {
+            return 100;
+        }
+
+        return take > 1000
+            ? 1000
+            : take;
+    }
+
+    private static string DisplayNullable(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "N/A"
+            : value;
+    }
+
+    private static string Truncate(
+        string value,
+        int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        if (value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value[..maxLength] + "...";
+    }
+
+    private static string GetRowCssClass(QueryHistory item)
+    {
+        if (item.WasSuccessful)
+        {
+            return string.Empty;
+        }
+
+        return "table-warning";
+    }
+}

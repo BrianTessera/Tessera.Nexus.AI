@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Tessera.Nexus.AI.Application.Contracts;
 using Tessera.Nexus.AI.Application.DTOs;
+using Tessera.Nexus.AI.Domain.Entities;
 
 namespace Tessera.Nexus.AI.Application.Services;
 
@@ -11,17 +12,20 @@ public sealed class QueryGenerationService : IQueryGenerationService
     private readonly ISqlGenerator _sqlGenerator;
     private readonly ISqlValidator _sqlValidator;
     private readonly IQueryExecutionService _queryExecutionService;
+    private readonly IQueryHistoryRepository _queryHistoryRepository;
 
     public QueryGenerationService(
         IPromptBuilder promptBuilder,
         ISqlGenerator sqlGenerator,
         ISqlValidator sqlValidator,
-        IQueryExecutionService queryExecutionService)
+        IQueryExecutionService queryExecutionService,
+        IQueryHistoryRepository queryHistoryRepository)
     {
         _promptBuilder = promptBuilder;
         _sqlGenerator = sqlGenerator;
         _sqlValidator = sqlValidator;
         _queryExecutionService = queryExecutionService;
+        _queryHistoryRepository = queryHistoryRepository;
     }
 
     public async Task<QueryResponse> GenerateQueryAsync(
@@ -37,6 +41,15 @@ public sealed class QueryGenerationService : IQueryGenerationService
             SqlValidated = false
         };
 
+        var history = new QueryHistory
+        {
+            UserQuestion = request?.UserQuestion ?? string.Empty,
+            TemplateName = request?.TemplateName,
+            QueryExecuted = request?.ExecuteQuery ?? false,
+            SourcePage = "QueryGeneratorPage",
+            CreatedDateUtc = DateTime.UtcNow
+        };
+
         try
         {
             if (request is null)
@@ -45,13 +58,6 @@ public sealed class QueryGenerationService : IQueryGenerationService
             }
 
             response.UserQuestion = request.UserQuestion;
-
-            if (string.IsNullOrWhiteSpace(request.UserQuestion))
-            {
-                throw new ArgumentException(
-                    "User question is required.",
-                    nameof(request));
-            }
 
             var prompt =
                 string.IsNullOrWhiteSpace(request.TemplateName)
@@ -63,17 +69,22 @@ public sealed class QueryGenerationService : IQueryGenerationService
                         request.UserQuestion,
                         cancellationToken);
 
+            response.GeneratedPrompt = prompt;
+            history.GeneratedPrompt = prompt;
+
             var generatedSql =
                 await _sqlGenerator.GenerateSqlAsync(
                     prompt,
                     cancellationToken);
 
+            response.GeneratedSql = generatedSql;
+            history.GeneratedSql = generatedSql;
+
             var validationResult =
                 _sqlValidator.Validate(generatedSql);
 
-            response.GeneratedPrompt = prompt;
-            response.GeneratedSql = generatedSql;
             response.SqlValidated = validationResult.IsValid;
+            history.SqlValidated = validationResult.IsValid;
 
             if (!validationResult.IsValid)
             {
@@ -85,6 +96,9 @@ public sealed class QueryGenerationService : IQueryGenerationService
                         Environment.NewLine,
                         validationResult.Violations);
 
+                history.WasSuccessful = false;
+                history.ErrorMessage = response.ErrorMessage;
+
                 return response;
             }
 
@@ -95,29 +109,40 @@ public sealed class QueryGenerationService : IQueryGenerationService
                         generatedSql,
                         cancellationToken);
 
-                response.RowCount = executionResult.RowCount;
+                response.ResultRowCount =
+                    executionResult.ResultRowCount;
 
-                if (!executionResult.Success)
-                {
-                    response.Success = false;
-                    response.ErrorMessage =
-                        executionResult.ErrorMessage ??
-                        "Query execution failed.";
+                history.ResultResultRowCount =
+                    executionResult.ResultRowCount;
 
-                    response.ResultJson =
-                        SerializeExecutionResult(
-                            executionResult);
-
-                    return response;
-                }
+                history.ExecutionElapsedMilliseconds =
+                    executionResult.ElapsedMilliseconds;
 
                 response.ResultJson =
                     SerializeExecutionResult(
                         executionResult);
+
+                history.ResultJson =
+                    response.ResultJson;
+
+                if (!executionResult.Success)
+                {
+                    response.Success = false;
+
+                    response.ErrorMessage =
+                        executionResult.ErrorMessage;
+
+                    history.WasSuccessful = false;
+                    history.ErrorMessage =
+                        executionResult.ErrorMessage;
+
+                    return response;
+                }
             }
 
             response.Success = true;
-            response.ErrorMessage = null;
+
+            history.WasSuccessful = true;
 
             return response;
         }
@@ -125,6 +150,9 @@ public sealed class QueryGenerationService : IQueryGenerationService
         {
             response.Success = false;
             response.ErrorMessage = ex.Message;
+
+            history.WasSuccessful = false;
+            history.ErrorMessage = ex.Message;
 
             return response;
         }
@@ -134,6 +162,20 @@ public sealed class QueryGenerationService : IQueryGenerationService
 
             response.ElapsedMilliseconds =
                 stopwatch.ElapsedMilliseconds;
+
+            history.GenerationElapsedMilliseconds =
+                stopwatch.ElapsedMilliseconds;
+
+            try
+            {
+                await _queryHistoryRepository.CreateAsync(
+                    history,
+                    cancellationToken);
+            }
+            catch
+            {
+                // History logging must never break query generation.
+            }
         }
     }
 
@@ -145,7 +187,7 @@ public sealed class QueryGenerationService : IQueryGenerationService
             executionResult.Success,
             executionResult.Sql,
             executionResult.ErrorMessage,
-            executionResult.RowCount,
+            executionResult.ResultRowCount,
             executionResult.ElapsedMilliseconds,
             executionResult.Columns,
             executionResult.Rows
