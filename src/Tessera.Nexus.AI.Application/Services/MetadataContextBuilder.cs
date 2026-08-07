@@ -9,10 +9,13 @@ public sealed class MetadataContextBuilder : IMetadataContextBuilder
     private readonly IEpicorMetadataRepository _metadataRepository;
 
     public MetadataContextBuilder(
-        IEpicorMetadataRepository metadataRepository)
+        IEpicorMetadataRepository metadataRepository,
+        IRelationshipContextBuilder relationshipContextBuilder)
     {
         _metadataRepository = metadataRepository;
+        _relationshipContextBuilder = relationshipContextBuilder;
     }
+    private readonly IRelationshipContextBuilder _relationshipContextBuilder;
 
     public async Task<string> BuildMetadataContextAsync(
         string userQuestion,
@@ -60,9 +63,14 @@ public sealed class MetadataContextBuilder : IMetadataContextBuilder
             builder,
             metadata.Fields);
 
-        AppendRelationships(
-            builder,
-            metadata.Relationships);
+        var relationshipContext =
+            _relationshipContextBuilder.BuildRelationshipContext(
+                metadata.Relationships);
+
+        if (!string.IsNullOrWhiteSpace(relationshipContext))
+        {
+            builder.AppendLine(relationshipContext);
+        }
 
         AppendBusinessSearchHints(
             builder,

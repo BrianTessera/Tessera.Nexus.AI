@@ -13,6 +13,23 @@ public interface IBusinessKnowledgeRepository
 
     Task<IReadOnlyList<BusinessKnowledge>> SearchAsync(
         string searchText,
+        int maxResults = 25,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<BusinessKnowledge>> GetRelevantKnowledgeAsync(
+        string userQuestion,
+        string? semanticDomain = null,
+        string? company = null,
+        string? plant = null,
+        int maxResults = 10,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<BusinessKnowledge>> GetBySemanticDomainAsync(
+        string semanticDomain,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<BusinessKnowledge>> GetExpiringKnowledgeAsync(
+        DateOnly cutoffDate,
         CancellationToken cancellationToken = default);
 
     Task<int> CreateAsync(
@@ -23,7 +40,12 @@ public interface IBusinessKnowledgeRepository
         BusinessKnowledge knowledge,
         CancellationToken cancellationToken = default);
 
-    Task DeleteAsync(
+    Task RetireAsync(
         int businessKnowledgeId,
+        string modifiedBy,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> ExistsAsync(
+        string knowledgeTitle,
         CancellationToken cancellationToken = default);
 }
