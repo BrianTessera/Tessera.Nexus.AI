@@ -1,0 +1,930 @@
+﻿@page "/ask"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using System.Text.Json
+@using Tessera.Nexus.AI.Application.Contracts
+@using Tessera.Nexus.AI.Application.DTOs
+
+@inject IQueryGenerationService QueryGenerationService
+
+<PageTitle>Ask Nexus</PageTitle>
+
+<div class="nexus-page">
+
+<section class="nexus-hero">
+        <img src="/images/tessera-nexus-logo-transparent-web.png"
+             alt="Tessera Nexus"
+             class="nexus-logo"/>
+        <h1 class="nexus-tagline">
+            Where Questions Become Insight.
+        </h1>
+        <p class="nexus-description">
+
+            AI-powered analytics, search, and knowledge discovery
+
+            across your enterprise.
+
+        </p>
+
+</section>
+
+    <section class="ask-panel mb-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-3 p-md-4">
+
+                <h2 class="ask-heading">
+                    What would you like to know?
+                </h2>
+
+                <textarea id="nexusQuestion"
+                          class="form-control"
+                          rows="3"
+                          @bind="_question"
+                          @bind:event="oninput"
+                          disabled="@_isLoading"
+                          placeholder="Example: Show the last 5 shipments for Northrop"></textarea>
+
+                <div class="text-center mt-3">
+                    <button class="btn btn-primary px-4"
+                            type="button"
+                            @onclick="AskAsync"
+                            disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"
+                                  role="status"
+                                  aria-hidden="true"></span>
+
+                            <span>Thinking...</span>
+                        }
+                        else
+                        {
+                            <span>Ask Nexus</span>
+                        }
+                    </button>
+
+                    <button class="btn btn-outline-secondary ms-2"
+                            type="button"
+                            @onclick="Clear"
+                            disabled="@_isLoading">
+                        Clear
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <section class="suggestions-panel mb-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h2 class="suggestions-heading mb-0">
+                    Suggested Questions
+                </h2>
+            </div>
+
+            <div class="card-body">
+                <div class="row g-3">
+
+                    @foreach (var suggestedQuestion in SuggestedQuestions)
+                    {
+                        <div class="col-lg-4 col-md-6">
+                            <button class="suggestion-card card h-100 w-100 text-start"
+                                    type="button"
+                                    @onclick="() => SelectQuestion(suggestedQuestion)"
+                                    disabled="@_isLoading">
+                                <span class="card-body">
+                                    @suggestedQuestion
+                                </span>
+                            </button>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger"
+             role="alert">
+            <strong>Nexus could not complete the request.</strong>
+
+            <div class="mt-1">
+                @_errorMessage
+            </div>
+        </div>
+    }
+
+    @if (_response is not null)
+    {
+        <section class="nexus-summary mb-4">
+            <div class="card border-primary shadow-sm">
+                <div class="card-header nexus-summary-header">
+                    Nexus Summary
+                </div>
+
+                <div class="card-body">
+                    @if (_response.Success)
+                    {
+                        <p class="summary-primary">
+                            Nexus successfully processed the request and returned
+                            <strong>@(_response.RowCount ?? 0)</strong>
+                            @GetRowLabel(_response.RowCount ?? 0).
+                        </p>
+
+                        @if (_resultTable is not null &&
+                             _resultTable.Rows.Count > 0)
+                        {
+                            <p class="mb-0 text-muted">
+                                The results are displayed below.
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="mb-0 text-muted">
+                                The query completed successfully but returned no matching data.
+                            </p>
+                        }
+                    }
+                    else
+                    {
+                        <p class="mb-0 text-danger">
+                            Nexus was unable to complete the request.
+                        </p>
+                    }
+                </div>
+            </div>
+        </section>
+
+        @if (_response.Success &&
+             _resultTable is not null)
+        {
+            <section class="results-panel mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h2 class="results-heading mb-0">
+                            Results
+                        </h2>
+
+                        <span class="badge bg-secondary">
+                            @_resultTable.Rows.Count
+                            @GetRowLabel(_resultTable.Rows.Count)
+                        </span>
+                    </div>
+
+                    <div class="card-body">
+                        @if (_resultTable.Rows.Count == 0)
+                        {
+                            <div class="alert alert-info mb-0">
+                                The query completed successfully but returned no rows.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive nexus-results-scroll">
+                                <table class="table table-striped table-hover table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            @foreach (var column in _resultTable.Columns)
+                                            {
+                                                <th scope="col">
+                                                    @FormatColumnName(column)
+                                                </th>
+                                            }
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        @foreach (var row in _resultTable.Rows)
+                                        {
+                                            <tr>
+                                                @foreach (var column in _resultTable.Columns)
+                                                {
+                                                    <td>
+                                                        @FormatCellValue(
+                                                            row,
+                                                            column)
+                                                    </td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+
+        <section class="advanced-panel mb-4">
+            <details class="advanced-details">
+                <summary>
+                    Advanced Details
+                </summary>
+
+                <div class="advanced-details-body">
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3 col-sm-6">
+                            <div class="diagnostic-card">
+                                <div class="diagnostic-label">
+                                    Request Success
+                                </div>
+
+                                <div class="diagnostic-value">
+                                    @if (_response.Success)
+                                    {
+                                        <span class="badge bg-success">
+                                            True
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">
+                                            False
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3 col-sm-6">
+                            <div class="diagnostic-card">
+                                <div class="diagnostic-label">
+                                    SQL Validated
+                                </div>
+
+                                <div class="diagnostic-value">
+                                    @if (_response.SqlValidated)
+                                    {
+                                        <span class="badge bg-success">
+                                            True
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">
+                                            False
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3 col-sm-6">
+                            <div class="diagnostic-card">
+                                <div class="diagnostic-label">
+                                    Total Processing
+                                </div>
+
+                                <div class="diagnostic-value">
+                                    @FormatDuration(
+                                        _response.ElapsedMilliseconds)
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3 col-sm-6">
+                            <div class="diagnostic-card">
+                                <div class="diagnostic-label">
+                                    Database Execution
+                                </div>
+
+                                <div class="diagnostic-value">
+                                    @if (_databaseElapsedMilliseconds.HasValue)
+                                    {
+                                        @FormatDuration(
+                                            _databaseElapsedMilliseconds.Value)
+                                    }
+                                    else
+                                    {
+                                        <span>N/A</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_response.GeneratedSql))
+                    {
+                        <div class="mb-4">
+                            <h3 class="advanced-heading">
+                                Generated SQL
+                            </h3>
+
+                            <pre class="advanced-code">@_response.GeneratedSql</pre>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_response.ResultJson))
+                    {
+                        <div class="mb-4">
+                            <h3 class="advanced-heading">
+                                Raw Execution Result
+                            </h3>
+
+                            <pre class="advanced-code">@_response.ResultJson</pre>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_response.GeneratedPrompt))
+                    {
+                        <div>
+                            <h3 class="advanced-heading">
+                                Generated Prompt
+                            </h3>
+
+                            <pre class="advanced-code">@_response.GeneratedPrompt</pre>
+                        </div>
+                    }
+
+                </div>
+            </details>
+        </section>
+    }
+
+</div>
+
+@code
+{
+    private QueryResponse? _response;
+    private QueryResultTable? _resultTable;
+
+    private string _question = string.Empty;
+    private string _errorMessage = string.Empty;
+
+    private bool _isLoading;
+
+    private long? _databaseElapsedMilliseconds;
+
+    private static readonly string[] SuggestedQuestions =
+    [
+        "Show the last 5 shipments for Northrop",
+        "Show the last 5 shipments for Boeing Commercial",
+        "Show the last 3 shipments for each Northrop and Boeing Commercial",
+        "List the top customers by shipment count",
+        "Show recent customer shipments"
+    ];
+
+    private async Task AskAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _errorMessage = string.Empty;
+            _response = null;
+            _resultTable = null;
+            _databaseElapsedMilliseconds = null;
+
+            if (string.IsNullOrWhiteSpace(_question))
+            {
+                _errorMessage =
+                    "Please enter a question.";
+
+                return;
+            }
+
+            var request = new QueryRequest
+            {
+                UserQuestion = _question.Trim(),
+                ExecuteQuery = true
+            };
+
+            _response =
+                await QueryGenerationService.GenerateQueryAsync(
+                    request);
+
+            if (!string.IsNullOrWhiteSpace(_response.ResultJson))
+            {
+                var parsedResult =
+                    ParseResultJson(
+                        _response.ResultJson);
+
+                _resultTable =
+                    parsedResult.ResultTable;
+
+                _databaseElapsedMilliseconds =
+                    parsedResult.ElapsedMilliseconds;
+            }
+
+            if (!_response.Success)
+            {
+                _errorMessage =
+                    _response.ErrorMessage ??
+                    "The query could not be completed.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage =
+                ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void SelectQuestion(
+        string question)
+    {
+        _question = question;
+        _errorMessage = string.Empty;
+    }
+
+    private void Clear()
+    {
+        _question = string.Empty;
+        _response = null;
+        _resultTable = null;
+        _databaseElapsedMilliseconds = null;
+        _errorMessage = string.Empty;
+    }
+
+    private static ParsedExecutionResult ParseResultJson(
+        string resultJson)
+    {
+        if (string.IsNullOrWhiteSpace(resultJson))
+        {
+            return new ParsedExecutionResult();
+        }
+
+        try
+        {
+            using var document =
+                JsonDocument.Parse(
+                    resultJson);
+
+            var root =
+                document.RootElement;
+
+            var columns =
+                new List<string>();
+
+            var rows =
+                new List<Dictionary<string, object?>>();
+
+            long? elapsedMilliseconds =
+                null;
+
+            if (root.TryGetProperty(
+                    "ElapsedMilliseconds",
+                    out var elapsedElement) &&
+                elapsedElement.ValueKind ==
+                    JsonValueKind.Number &&
+                elapsedElement.TryGetInt64(
+                    out var elapsedValue))
+            {
+                elapsedMilliseconds =
+                    elapsedValue;
+            }
+
+            if (root.TryGetProperty(
+                    "Columns",
+                    out var columnsElement) &&
+                columnsElement.ValueKind ==
+                    JsonValueKind.Array)
+            {
+                foreach (var columnElement
+                         in columnsElement.EnumerateArray())
+                {
+                    var columnName =
+                        columnElement.GetString();
+
+                    if (!string.IsNullOrWhiteSpace(
+                            columnName))
+                    {
+                        columns.Add(
+                            columnName);
+                    }
+                }
+            }
+
+            if (root.TryGetProperty(
+                    "Rows",
+                    out var rowsElement) &&
+                rowsElement.ValueKind ==
+                    JsonValueKind.Array)
+            {
+                foreach (var rowElement
+                         in rowsElement.EnumerateArray())
+                {
+                    if (rowElement.ValueKind !=
+                        JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    var row =
+                        new Dictionary<string, object?>(
+                            StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var property
+                             in rowElement.EnumerateObject())
+                    {
+                        row[property.Name] =
+                            ConvertJsonValue(
+                                property.Value);
+
+                        if (!columns.Contains(
+                                property.Name,
+                                StringComparer.OrdinalIgnoreCase))
+                        {
+                            columns.Add(
+                                property.Name);
+                        }
+                    }
+
+                    rows.Add(row);
+                }
+            }
+
+            return new ParsedExecutionResult
+            {
+                ElapsedMilliseconds =
+                    elapsedMilliseconds,
+
+                ResultTable =
+                    new QueryResultTable
+                    {
+                        Columns = columns,
+                        Rows = rows
+                    }
+            };
+        }
+        catch (JsonException)
+        {
+            return new ParsedExecutionResult();
+        }
+    }
+
+    private static object? ConvertJsonValue(
+        JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null =>
+                null,
+
+            JsonValueKind.String =>
+                ConvertStringValue(
+                    element.GetString()),
+
+            JsonValueKind.Number
+                when element.TryGetInt64(
+                    out var integerValue) =>
+                integerValue,
+
+            JsonValueKind.Number
+                when element.TryGetDecimal(
+                    out var decimalValue) =>
+                decimalValue,
+
+            JsonValueKind.True =>
+                true,
+
+            JsonValueKind.False =>
+                false,
+
+            _ =>
+                element.ToString()
+        };
+    }
+
+    private static object? ConvertStringValue(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        if (DateTime.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out var dateTime))
+        {
+            return dateTime;
+        }
+
+        return value;
+    }
+
+    private static string FormatCellValue(
+        IReadOnlyDictionary<string, object?> row,
+        string column)
+    {
+        if (!row.TryGetValue(
+                column,
+                out var value) ||
+            value is null)
+        {
+            return string.Empty;
+        }
+
+        return value switch
+        {
+            DateTime dateTime =>
+                dateTime.TimeOfDay == TimeSpan.Zero
+                    ? dateTime.ToString(
+                        "MMMM d, yyyy",
+                        CultureInfo.InvariantCulture)
+                    : dateTime.ToString(
+                        "MMMM d, yyyy h:mm tt",
+                        CultureInfo.InvariantCulture),
+
+            decimal decimalValue =>
+                decimalValue.ToString(
+                    "N2",
+                    CultureInfo.CurrentCulture),
+
+            double doubleValue =>
+                doubleValue.ToString(
+                    "N2",
+                    CultureInfo.CurrentCulture),
+
+            bool boolValue =>
+                boolValue
+                    ? "Yes"
+                    : "No",
+
+            _ =>
+                Convert.ToString(
+                    value,
+                    CultureInfo.CurrentCulture) ??
+                string.Empty
+        };
+    }
+
+    private static string FormatColumnName(
+        string columnName)
+    {
+        if (string.IsNullOrWhiteSpace(
+                columnName))
+        {
+            return string.Empty;
+        }
+
+        var result =
+            new System.Text.StringBuilder();
+
+        for (var index = 0;
+             index < columnName.Length;
+             index++)
+        {
+            var character =
+                columnName[index];
+
+            if (index > 0 &&
+                char.IsUpper(character) &&
+                !char.IsUpper(
+                    columnName[index - 1]))
+            {
+                result.Append(' ');
+            }
+
+            result.Append(character);
+        }
+
+        return result
+            .ToString()
+            .Replace(
+                "Pack Num",
+                "Shipment Number",
+                StringComparison.OrdinalIgnoreCase)
+            .Replace(
+                "Ship Date",
+                "Ship Date",
+                StringComparison.OrdinalIgnoreCase)
+            .Replace(
+                "Cust Num",
+                "Customer Number",
+                StringComparison.OrdinalIgnoreCase)
+            .Replace(
+                "Cust ID",
+                "Customer ID",
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatDuration(
+        long elapsedMilliseconds)
+    {
+        if (elapsedMilliseconds < 1000)
+        {
+            return $"{elapsedMilliseconds:N0} ms";
+        }
+
+        return $"{elapsedMilliseconds / 1000d:N1} sec";
+    }
+
+    private static string GetRowLabel(
+        int rowCount)
+    {
+        return rowCount == 1
+            ? "row"
+            : "rows";
+    }
+
+    private sealed class ParsedExecutionResult
+    {
+        public long? ElapsedMilliseconds { get; set; }
+
+        public QueryResultTable? ResultTable { get; set; }
+    }
+
+    private sealed class QueryResultTable
+    {
+        public IReadOnlyList<string> Columns { get; set; } =
+            Array.Empty<string>();
+
+        public IReadOnlyList<Dictionary<string, object?>> Rows { get; set; } =
+            Array.Empty<Dictionary<string, object?>>();
+    }
+}
+
+<style>
+    .nexus-page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1rem 1.25rem 2rem;
+    }
+
+    .nexus-hero {
+        padding: 0.5rem 0 1.25rem;
+        text-align: center;
+    }
+
+    .nexus-logo {
+        display: block;
+        width: min(100%, 430px);
+        height: auto;
+        margin: 0 auto 0.75rem;
+    }
+
+    .nexus-tagline {
+        margin: 0 0 0.4rem;
+        color: #1d4ed8;
+        font-size: 1.55rem;
+        line-height: 1.2;
+        font-weight: 700;
+    }
+
+    .nexus-description {
+        max-width: 700px;
+        margin: 0 auto;
+        color: #64748b;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+
+    .ask-panel {
+        max-width: 900px;
+        margin-right: auto;
+        margin-left: auto;
+    }
+
+    .ask-heading {
+        margin-bottom: 1rem;
+        text-align: center;
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    .suggestions-panel {
+        max-width: 1000px;
+        margin-right: auto;
+        margin-left: auto;
+    }
+
+    .suggestions-heading,
+    .results-heading {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .suggestion-card {
+        padding: 0;
+        color: inherit;
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        cursor: pointer;
+        transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+        .suggestion-card:hover:not(:disabled) {
+            transform: translateY(-1px);
+            border-color: #2563eb;
+            box-shadow: 0 0.25rem 0.75rem rgba(15, 23, 42, 0.10);
+        }
+
+        .suggestion-card:disabled {
+            cursor: default;
+            opacity: 0.65;
+        }
+
+    .nexus-summary-header {
+        color: #ffffff;
+        background-color: #2563eb;
+        font-weight: 600;
+    }
+
+    .summary-primary {
+        margin-bottom: 0.4rem;
+        font-size: 1.05rem;
+    }
+
+    .nexus-results-scroll {
+        max-height: 600px;
+        overflow: auto;
+    }
+
+        .nexus-results-scroll thead {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background-color: #f8fafc;
+        }
+
+    .advanced-details {
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        background-color: #ffffff;
+    }
+
+        .advanced-details > summary {
+            padding: 0.9rem 1rem;
+            color: #1d4ed8;
+            background-color: #f8fafc;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+    .advanced-details-body {
+        padding: 1rem;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .advanced-heading {
+        margin-bottom: 0.75rem;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .advanced-code {
+        max-height: 450px;
+        overflow: auto;
+        padding: 1rem;
+        margin-bottom: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+    }
+
+    .diagnostic-card {
+        height: 100%;
+        padding: 0.75rem;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+    }
+
+    .diagnostic-label {
+        margin-bottom: 0.35rem;
+        color: #64748b;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03rem;
+    }
+
+    .diagnostic-value {
+        color: #0f172a;
+        font-weight: 600;
+    }
+
+    @@media (max-width: 768px) {
+        .nexus-page {
+            padding: 0.75rem;
+        }
+
+        .nexus-logo {
+            width: min(100%, 340px);
+        }
+
+        .nexus-tagline {
+            font-size: 1.3rem;
+        }
+
+        .nexus-description {
+            font-size: 0.95rem;
+        }
+    }
+</style>
